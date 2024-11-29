@@ -1,0 +1,386 @@
+from tkinter import *
+from tkinter import ttk, messagebox
+import pickle
+from datetime import datetime
+
+
+# Constants for file storage (used for saving and loading data)
+CUSTOMERS_FILE = "customers.pkl"
+SALES_FILE = "sales.pkl"
+BOOKINGS_FILE = "bookings.pkl"
+
+
+
+
+# Helper function to save data to binary files
+def save_data(data, file_name):
+   with open(file_name, "wb") as file:
+       pickle.dump(data, file)
+
+
+
+
+# Helper function to load data from binary files
+def load_data(file_name):
+   try:
+       with open(file_name, "rb") as file:
+           data = pickle.load(file)
+           return data  # Return the loaded data
+   except (FileNotFoundError, EOFError):
+       # If the file is missing or empty, return default values
+       if file_name in [SALES_FILE, BOOKINGS_FILE]:
+           return {}  # Dictionary for sales or bookings
+       if file_name == CUSTOMERS_FILE:
+           return []  # List for customers
+       return {}  # Default return for other cases
+
+
+
+
+# Ticket Class: Represents a generic ticket
+class Ticket:
+   def __init__(self, ticket_type, price, validity):
+       self.ticket_type = ticket_type  # Type of ticket (e.g., Single-Day Pass)
+       self.price = price  # Price of the ticket
+       self.validity = validity  # Validity of the ticket in days
+
+
+   # Apply a discount to the ticket price
+   def apply_discount(self, discount_rate):
+       self.price -= self.price * discount_rate / 100
+
+
+   # String representation of the ticket for display purposes
+   def __str__(self):
+       return f"{self.ticket_type} - {self.price} AED - {self.validity} day(s)"
+
+
+
+
+# Subclass for Single-Day Pass tickets
+class SingleDayPass(Ticket):
+   def __init__(self, validity=1, price=275):
+       super().__init__("Single-Day Pass", price, validity)
+
+
+
+
+# Subclass for Group Tickets
+class GroupTicket(Ticket):
+   def __init__(self, group_size, price_per_person=220):
+       total_price = group_size * price_per_person  # Calculate total price for the group
+       super().__init__("Group Ticket", total_price, 1)
+       self.group_size = group_size  # Number of people in the group
+
+
+
+
+# Customer Class: Represents a customer with a name and email
+class Customer:
+   def __init__(self, name, email):
+       self.name = name  # Customer's name
+       self.email = email  # Customer's email
+
+
+   # String representation of the customer
+   def __str__(self):
+       return f"{self.name} ({self.email})"
+
+
+
+
+# TicketBooking Class: Represents a booking for tickets
+class TicketBooking:
+   def __init__(self, booking_id, date, tickets, total_cost):
+       self.booking_id = booking_id  # Unique booking ID
+       self.date = date  # Date of the booking
+       self.tickets = tickets  # List of tickets in the booking
+       self.total_cost = total_cost  # Total cost of the booking
+
+
+   # Finalize the booking and return a summary
+   def finalize_booking(self):
+       return f"Booking ID: {self.booking_id} finalized with {len(self.tickets)} ticket(s). Total Cost: {self.total_cost} AED."
+
+
+   # String representation of the booking
+   def __str__(self):
+       return f"Booking ID: {self.booking_id}, Date: {self.date}, Tickets: {len(self.tickets)}, Total Cost: {self.total_cost} AED"
+
+
+
+
+# Admin Class: Used for managing ticket sales and tracking capacity
+class Admin:
+   def __init__(self, admin_id):
+       self.admin_id = admin_id  # Admin ID
+
+
+   # Update sales for a specific ticket type
+   @staticmethod
+   def update_sales(ticket_type, quantity):
+       sales = load_data(SALES_FILE)  # Load current sales data
+       sales[ticket_type] = sales.get(ticket_type, 0) + quantity  # Increment sales for the ticket type
+       save_data(sales, SALES_FILE)  # Save the updated sales data
+
+
+   # View the current sales report
+   @staticmethod
+   def view_sales_report():
+       return load_data(SALES_FILE)
+
+
+   # Dummy method for tracking capacity (can be implemented later)
+   @staticmethod
+   def track_capacity():
+       return "Capacity tracking not implemented."
+
+
+
+
+# GUI Implementation
+class TicketManagementApp:
+   def __init__(self, root):
+       self.root = root  # Root window for the GUI
+       self.root.title("Ticket Management System")  # Set the title of the window
+
+
+       # Load existing customer, booking, and sales data
+       self.customers = load_data(CUSTOMERS_FILE)
+       self.bookings = load_data(BOOKINGS_FILE)
+
+
+       # List of available tickets
+       self.tickets = [
+           SingleDayPass(),  # Example of a single-day pass
+           Ticket("Two-Day Pass", 480, 2),
+           Ticket("Annual Membership", 1840, 365),
+           Ticket("Child Ticket", 185, 1),
+           GroupTicket(10),
+           Ticket("VIP Experience Pass", 550, 1),
+       ]
+
+
+       # Create a tabbed interface for Account Management, Ticket Purchasing, and Admin Dashboard
+       self.tabs = ttk.Notebook(root)
+       self.tabs.pack(expand=1, fill="both")  # Allow tabs to expand and fill the window
+
+
+       # Define tabs
+       self.account_tab = Frame(self.tabs)
+       self.ticket_tab = Frame(self.tabs)
+       self.admin_tab = Frame(self.tabs)
+
+
+       # Add tabs to the GUI
+       self.tabs.add(self.account_tab, text="Account Management")
+       self.tabs.add(self.ticket_tab, text="Ticket Purchasing")
+       self.tabs.add(self.admin_tab, text="Admin Dashboard")
+
+
+       # Build individual tabs
+       self.build_account_tab()
+       self.build_ticket_tab()
+       self.build_admin_tab()
+
+
+   # Build the "Account Management" tab
+   def build_account_tab(self):
+       Label(self.account_tab, text="Add New Customer").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+       Label(self.account_tab, text="Name:").grid(row=1, column=0, padx=10, sticky="e")
+       Label(self.account_tab, text="Email:").grid(row=2, column=0, padx=10, sticky="e")
+
+
+       # Entry fields for customer name and email
+       self.name_entry = Entry(self.account_tab)
+       self.name_entry.grid(row=1, column=1, padx=10, pady=5)
+
+
+       self.email_entry = Entry(self.account_tab)
+       self.email_entry.grid(row=2, column=1, padx=10, pady=5)
+
+
+       # Button to add a customer
+       Button(self.account_tab, text="Add Customer", command=self.add_customer).grid(row=3, column=0, columnspan=2, pady=10)
+
+
+       # Listbox to display customers
+       Label(self.account_tab, text="Customer List:").grid(row=4, column=0, padx=10, pady=10, sticky="w")
+       self.customer_listbox = Listbox(self.account_tab, width=50, height=10)
+       self.customer_listbox.grid(row=5, column=0, columnspan=2, padx=10, pady=5)
+       self.update_customer_list()  # Populate the listbox with existing customers
+
+
+       # Button to delete a selected customer
+       Button(self.account_tab, text="Delete Selected Customer", command=self.delete_customer).grid(row=6, column=0, columnspan=2, pady=10)
+
+
+   # Add a new customer
+   def add_customer(self):
+       name = self.name_entry.get().strip()
+       email = self.email_entry.get().strip()
+
+
+       # Ensure both name and email are provided
+       if name and email:
+           customer = Customer(name, email)  # Create a new Customer object
+           self.customers.append(customer)  # Add to the customer list
+           save_data(self.customers, CUSTOMERS_FILE)  # Save the updated customer list
+           messagebox.showinfo("Success", "Customer added successfully!")  # Display a success message
+           self.name_entry.delete(0, END)  # Clear the input fields
+           self.email_entry.delete(0, END)
+           self.update_customer_list()  # Refresh the customer listbox
+       else:
+           messagebox.showerror("Error", "Both name and email fields are required.")  # Show an error message
+
+
+   # Update the customer listbox
+   def update_customer_list(self):
+       self.customer_listbox.delete(0, END)  # Clear the current listbox
+       for customer in self.customers:
+           self.customer_listbox.insert(END, str(customer))  # Add each customer to the listbox
+
+
+   # Delete a selected customer
+   def delete_customer(self):
+       # Get the selected customer from the listbox
+       selected_index = self.customer_listbox.curselection()
+
+
+       # Check if a customer is selected
+       if not selected_index:
+           messagebox.showerror("Error", "Please select a customer to delete.")  # Show an error if no selection
+           return
+
+
+       # Confirm deletion
+       confirm = messagebox.askyesno("Confirm Deletion", "Are you sure you want to delete this customer?")
+       if not confirm:
+           return
+
+
+       # Remove the selected customer from the list
+       customer_to_delete = self.customers.pop(selected_index[0])
+
+
+       # Save the updated customer list
+       save_data(self.customers, CUSTOMERS_FILE)
+
+
+       # Update the listbox
+       self.update_customer_list()
+
+
+       # Show a success message
+       messagebox.showinfo("Success", f"Customer '{customer_to_delete.name}' has been deleted.")
+
+
+   # Build the "Ticket Purchasing" tab
+   def build_ticket_tab(self):
+       Label(self.ticket_tab, text="Available Tickets").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+
+       # Listbox to display tickets
+       self.ticket_listbox = Listbox(self.ticket_tab, width=50, height=10)
+       self.ticket_listbox.grid(row=1, column=0, padx=10, pady=10, columnspan=2)
+
+
+       # Populate the listbox with ticket information
+       for ticket in self.tickets:
+           self.ticket_listbox.insert(END, str(ticket))
+
+
+       # Entry field to specify the number of tickets to purchase
+       Label(self.ticket_tab, text="Number of Tickets:").grid(row=2, column=0, padx=10, pady=5, sticky="e")
+       self.ticket_quantity = Entry(self.ticket_tab, width=10)
+       self.ticket_quantity.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+
+
+       # Button to purchase a ticket
+       Button(self.ticket_tab, text="Purchase Selected Ticket", command=self.purchase_ticket).grid(
+           row=3, column=0, columnspan=2, pady=10
+       )
+
+
+   # Purchase a selected ticket
+   def purchase_ticket(self):
+       selected_ticket_index = self.ticket_listbox.curselection()  # Get the selected ticket
+       quantity = self.ticket_quantity.get().strip()  # Get the quantity entered by the user
+
+
+       # Validate ticket selection and quantity
+       if not selected_ticket_index:
+           messagebox.showerror("Error", "Please select a ticket to purchase.")  # Show an error if no ticket is selected
+           return
+
+
+       if not quantity.isdigit() or int(quantity) <= 0:
+           messagebox.showerror("Error", "Please enter a valid number of tickets.")  # Show an error for invalid quantity
+           return
+
+
+       quantity = int(quantity)  # Convert quantity to an integer
+
+
+       # Ensure at least one customer exists
+       if not self.customers:
+           messagebox.showerror("Error", "No customers available. Add a customer first!")  # Show an error if no customers
+           return
+
+
+       selected_ticket = self.tickets[selected_ticket_index[0]]  # Get the selected ticket
+       total_cost = selected_ticket.price * quantity  # Calculate the total cost
+
+
+       # Show a confirmation dialog
+       confirm = messagebox.askyesno(
+           "Confirm Purchase",
+           f"You are about to purchase {quantity} {selected_ticket.ticket_type}(s) for {total_cost} AED. Do you want to proceed?"
+       )
+
+
+       # If the user confirms, finalize the purchase
+       if confirm:
+           Admin.update_sales(selected_ticket.ticket_type, quantity)  # Update sales data
+           booking = TicketBooking(
+               len(self.bookings) + 1,
+               datetime.now().strftime("%Y-%m-%d"),
+               [selected_ticket] * quantity,  # Create a list of the selected tickets
+               total_cost,
+           )
+           self.bookings[booking.booking_id] = booking  # Add the booking to the bookings dictionary
+           save_data(self.bookings, BOOKINGS_FILE)  # Save the updated bookings
+           messagebox.showinfo("Success", f"Purchased {quantity} {selected_ticket.ticket_type}(s) for {total_cost} AED.")  # Success message
+
+
+   # Build the "Admin Dashboard" tab
+   def build_admin_tab(self):
+       Label(self.admin_tab, text="Sales Report").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+
+       # Text widget to display the sales report
+       self.sales_text = Text(self.admin_tab, width=60, height=15)
+       self.sales_text.grid(row=1, column=0, padx=10, pady=10)
+
+
+       # Button to refresh and view the sales report
+       Button(self.admin_tab, text="View Sales Report", command=self.view_sales_report).grid(row=2, column=0, pady=10)
+
+
+   # View the sales report in the admin tab
+   def view_sales_report(self):
+       sales = Admin.view_sales_report()  # Load the sales data
+       self.sales_text.delete(1.0, END)  # Clear the sales report text widget
+       if not sales:
+           self.sales_text.insert(END, "No sales data available.")  # Show a message if no sales data is available
+       else:
+           for ticket_type, count in sales.items():
+               self.sales_text.insert(END, f"{ticket_type}: {count} tickets sold\n")  # Display sales data
+
+
+
+
+# Initialize the GUI application
+root = Tk()
+app = TicketManagementApp(root)
+root.mainloop()
